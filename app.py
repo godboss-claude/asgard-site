@@ -15,7 +15,11 @@ app = Flask(__name__)
 
 
 def _load_secret_key():
-    key = os.environ.get("SECRET_KEY", "").strip()
+    key = ""
+    for k, v in os.environ.items():
+        if k.lower() == "secret_key":
+            key = v.strip()
+            break
     if key:
         return key
     key_file = os.path.join(BASE_DIR, ".secret_key")

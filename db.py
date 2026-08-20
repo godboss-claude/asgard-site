@@ -5,8 +5,14 @@ import sqlite3
 
 import requests
 
-TURSO_URL = os.environ.get("TURSO_URL", "").strip().rstrip("/")
-TURSO_TOKEN = os.environ.get("TURSO_TOKEN", "").strip()
+TURSO_URL = ""
+TURSO_TOKEN = ""
+for _k, _v in os.environ.items():
+    if _k.lower() == "turso_url" and not TURSO_URL:
+        TURSO_URL = _v.strip()
+    elif _k.lower() == "turso_token" and not TURSO_TOKEN:
+        TURSO_TOKEN = _v.strip()
+TURSO_URL = TURSO_URL.rstrip("/")
 
 
 class IntegrityError(Exception):
