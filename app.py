@@ -1,31 +1,39 @@
 import os
 import re
 import secrets
-import sqlite3
 from datetime import datetime, timedelta, timezone
 from functools import wraps
 
 from flask import Flask, g, jsonify, redirect, render_template, request, session, url_for, flash
 from werkzeug.security import check_password_hash, generate_password_hash
 
+import db as dblib
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_PATH = os.path.join(BASE_DIR, "asgard.db")
 
 app = Flask(__name__)
 
+
 def _load_secret_key():
+    key = os.environ.get("SECRET_KEY", "").strip()
+    if key:
+        return key
     key_file = os.path.join(BASE_DIR, ".secret_key")
     if os.path.exists(key_file):
         with open(key_file, "r", encoding="utf-8") as f:
             return f.read().strip()
     key = os.urandom(32).hex()
-    with open(key_file, "w", encoding="utf-8") as f:
-        f.write(key)
+    try:
+        with open(key_file, "w", encoding="utf-8") as f:
+            f.write(key)
+    except Exception:
+        pass
     return key
+
 
 app.secret_key = _load_secret_key()
 
-# Куда ведёт кнопка «Скачать клиент» (jar с Google Drive / ссылка на лоадер).
+# Куда ведёт кнопка «Скачать клиент» (jar с Google Drive / ссылка на лаунчер).
 CLIENT_JAR_URL = "https://drive.google.com/uc?export=download&id=1GjB02yZc0fYc5-G_hTfowj7RNdI7vjyF"
 LAUNCHER_ZIP_URL = "https://drive.google.com/uc?export=download&id=1s85aO0Dd4t8eNKpESlhZswHKDnjBXYsj"
 
@@ -33,52 +41,57 @@ TOKEN_TTL_DAYS = 30
 HWID_LIMIT = 3
 HWID_RE = re.compile(r"^[A-Za-z0-9\-:]{8,128}$")
 
+SCHEMA = [
+    """
+    CREATE TABLE IF NOT EXISTS users (
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        username      TEXT UNIQUE NOT NULL,
+        password_hash TEXT NOT NULL,
+        created_at    TEXT DEFAULT (datetime('now'))
+    );
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS hwids (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        hwid       TEXT NOT NULL,
+        label      TEXT DEFAULT '',
+        created_at TEXT DEFAULT (datetime('now'))
+    );
+    """,
+    "CREATE UNIQUE INDEX IF NOT EXISTS idx_hwid ON hwids (user_id, hwid);",
+    """
+    CREATE TABLE IF NOT EXISTS tokens (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        token      TEXT UNIQUE NOT NULL,
+        created_at TEXT DEFAULT (datetime('now')),
+        expires_at TEXT NOT NULL
+    );
+    """,
+]
+
+
+def init_db():
+    d = dblib.Database()
+    try:
+        d.init_schema(SCHEMA)
+    finally:
+        d.close()
+
 
 def get_db():
-    db = getattr(g, "_db", None)
-    if db is None:
-        db = g._db = sqlite3.connect(DB_PATH)
-        db.row_factory = sqlite3.Row
-    return db
+    d = getattr(g, "_db", None)
+    if d is None:
+        d = g._db = dblib.Database()
+    return d
 
 
 @app.teardown_appcontext
 def close_db(_exc):
-    db = getattr(g, "_db", None)
-    if db is not None:
-        db.close()
-
-
-def init_db():
-    with sqlite3.connect(DB_PATH) as db:
-        db.executescript(
-            """
-            CREATE TABLE IF NOT EXISTS users (
-                id            INTEGER PRIMARY KEY AUTOINCREMENT,
-                username      TEXT UNIQUE NOT NULL,
-                password_hash TEXT NOT NULL,
-                created_at    TEXT DEFAULT (datetime('now'))
-            );
-
-            CREATE TABLE IF NOT EXISTS hwids (
-                id         INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-                hwid       TEXT NOT NULL,
-                label      TEXT DEFAULT '',
-                created_at TEXT DEFAULT (datetime('now'))
-            );
-
-            CREATE UNIQUE INDEX IF NOT EXISTS idx_hwid ON hwids (user_id, hwid);
-
-            CREATE TABLE IF NOT EXISTS tokens (
-                id         INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-                token      TEXT UNIQUE NOT NULL,
-                created_at TEXT DEFAULT (datetime('now')),
-                expires_at TEXT NOT NULL
-            );
-            """
-        )
+    d = getattr(g, "_db", None)
+    if d is not None:
+        d.close()
 
 
 def login_required(view):
@@ -95,7 +108,8 @@ def current_user():
     uid = session.get("user_id")
     if uid is None:
         return None
-    return get_db().execute("SELECT * FROM users WHERE id = ?", (uid,)).fetchone()
+    rows = get_db().query("SELECT * FROM users WHERE id = ?", (uid,))
+    return rows[0] if rows else None
 
 
 @app.route("/")
@@ -124,15 +138,18 @@ def register():
             error = "Пароли не совпадают."
         else:
             db = get_db()
-            if db.execute("SELECT id FROM users WHERE username = ?", (username,)).fetchone():
+            if db.query("SELECT id FROM users WHERE username = ?", (username,)):
                 error = "Такой логин уже занят."
             else:
-                db.execute(
-                    "INSERT INTO users (username, password_hash) VALUES (?, ?)",
-                    (username, generate_password_hash(password)),
-                )
-                db.commit()
-                return redirect(url_for("login"))
+                try:
+                    db.run(
+                        "INSERT INTO users (username, password_hash) VALUES (?, ?)",
+                        (username, generate_password_hash(password)),
+                    )
+                except dblib.IntegrityError:
+                    error = "Такой логин уже занят."
+                else:
+                    return redirect(url_for("login"))
 
     return render_template("register.html", user=None, error=error)
 
@@ -148,7 +165,8 @@ def login():
         password = request.form.get("password", "")
 
         db = get_db()
-        user = db.execute("SELECT * FROM users WHERE username = ?", (username,)).fetchone()
+        rows = db.query("SELECT * FROM users WHERE username = ?", (username,))
+        user = rows[0] if rows else None
         if user is None or not check_password_hash(user["password_hash"], password):
             error = "Неверный логин или пароль."
         else:
@@ -169,9 +187,9 @@ def logout():
 @login_required
 def dashboard():
     user = current_user()
-    hwids = get_db().execute(
+    hwids = get_db().query(
         "SELECT * FROM hwids WHERE user_id = ? ORDER BY id", (user["id"],)
-    ).fetchall()
+    )
     return render_template("dashboard.html", user=user, hwids=hwids)
 
 
@@ -187,21 +205,20 @@ def add_hwid():
         return redirect(url_for("dashboard"))
 
     db = get_db()
-    count = db.execute(
+    count = db.query(
         "SELECT COUNT(*) AS c FROM hwids WHERE user_id = ?", (user["id"],)
-    ).fetchone()["c"]
+    )[0]["c"]
     if count >= HWID_LIMIT:
         flash(f"Лимит HWID ({HWID_LIMIT}) исчерпан. Сначала удали один из существующих.", "error")
         return redirect(url_for("dashboard"))
 
     try:
-        db.execute(
+        db.run(
             "INSERT INTO hwids (user_id, hwid, label) VALUES (?, ?, ?)",
             (user["id"], hwid, label),
         )
-        db.commit()
         flash("HWID добавлен.", "ok")
-    except sqlite3.IntegrityError:
+    except dblib.IntegrityError:
         flash("Этот HWID уже привязан к аккаунту.", "error")
 
     return redirect(url_for("dashboard"))
@@ -212,8 +229,7 @@ def add_hwid():
 def delete_hwid(hwid_id):
     user = current_user()
     db = get_db()
-    db.execute("DELETE FROM hwids WHERE id = ? AND user_id = ?", (hwid_id, user["id"]))
-    db.commit()
+    db.run("DELETE FROM hwids WHERE id = ? AND user_id = ?", (hwid_id, user["id"]))
     flash("HWID удалён.", "ok")
     return redirect(url_for("dashboard"))
 
@@ -237,31 +253,31 @@ def _expires_utc(days):
 
 
 def _token_user(db, token):
-    row = db.execute(
+    rows = db.query(
         """SELECT t.token, t.expires_at, u.*
            FROM tokens t JOIN users u ON u.id = t.user_id
            WHERE t.token = ?""",
         (token,),
-    ).fetchone()
+    )
+    row = rows[0] if rows else None
     if row is None or row["expires_at"] < _now_utc():
         return None
     return row
 
 
 def _hwid_bound(db, user_id, hwid):
-    return (
-        db.execute(
+    return bool(
+        db.query(
             "SELECT id FROM hwids WHERE user_id = ? AND hwid = ?",
             (user_id, hwid),
-        ).fetchone()
-        is not None
+        )
     )
 
 
 def _hwid_count(db, user_id):
-    return db.execute(
+    return db.query(
         "SELECT COUNT(*) AS c FROM hwids WHERE user_id = ?", (user_id,)
-    ).fetchone()["c"]
+    )[0]["c"]
 
 
 @app.route("/api/launcher/auth", methods=["POST"])
@@ -277,7 +293,8 @@ def api_launcher_auth():
         return jsonify({"ok": False, "error": "Не удалось определить HWID этого компьютера."}), 400
 
     db = get_db()
-    user = db.execute("SELECT * FROM users WHERE username = ?", (username,)).fetchone()
+    rows = db.query("SELECT * FROM users WHERE username = ?", (username,))
+    user = rows[0] if rows else None
     if user is None or not check_password_hash(user["password_hash"], password):
         return jsonify({"ok": False, "error": "Неверный логин или пароль."}), 401
 
@@ -289,18 +306,16 @@ def api_launcher_auth():
                     "error": f"Лимит HWID ({HWID_LIMIT}) исчерпан. Удали старый HWID в личном кабинете на сайте.",
                 }
             ), 403
-        db.execute(
+        db.run(
             "INSERT INTO hwids (user_id, hwid, label) VALUES (?, ?, ?)",
             (user["id"], hwid, "auto"),
         )
-        db.commit()
 
     token = secrets.token_hex(32)
-    db.execute(
+    db.run(
         "INSERT INTO tokens (user_id, token, expires_at) VALUES (?, ?, ?)",
         (user["id"], token, _expires_utc(TOKEN_TTL_DAYS)),
     )
-    db.commit()
     return jsonify(
         {
             "ok": True,
@@ -336,8 +351,7 @@ def api_launcher_logout():
     token = (data.get("token") or "").strip()
     if token:
         db = get_db()
-        db.execute("DELETE FROM tokens WHERE token = ?", (token,))
-        db.commit()
+        db.run("DELETE FROM tokens WHERE token = ?", (token,))
     return jsonify({"ok": True})
 
 
