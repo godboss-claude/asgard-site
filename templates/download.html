@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Скачать — Asgard{% endblock %}
+{% block content %}
+<div class="card download-card">
+    <h2>Скачать Asgard</h2>
+    {% if not user %}
+        <p class="muted">Для скачивания нужно войти в аккаунт.</p>
+        <a href="{{ url_for('login') }}" class="btn big">Войти</a>
+        <a href="{{ url_for('register') }}" class="btn big ghost">Создать аккаунт</a>
+    {% else %}
+        <p class="muted">Доступ открыт. Скачай клиент и следуй инструкции.</p>
+        <a href="{{ jar_url }}" class="btn big">Скачать клиент (jar)</a>
+        {% if loader_url %}
+            <a href="{{ loader_url }}" class="btn big ghost">Скачать лоадер</a>
+        {% endif %}
+    {% endif %}
+</div>
+{% endblock %}

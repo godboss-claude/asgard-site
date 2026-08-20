@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}Кабинет — Asgard{% endblock %}
+{% block content %}
+<div class="dashboard">
+    <div class="card">
+        <h2>Кабинет: {{ user['username'] }}</h2>
+        <p class="muted">Аккаунт создан: {{ user['created_at'] }}</p>
+        <p class="muted">Кол-во привязанных HWID: {{ hwids|length }} / 3</p>
+    </div>
+
+    <div class="card">
+        <h3>Добавить HWID</h3>
+        <form method="post" action="{{ url_for('add_hwid') }}">
+            <label>HWID
+                <input type="text" name="hwid" required placeholder="Например: 5F3A-9C21-...">
+            </label>
+            <label>Метка (необязательно)
+                <input type="text" name="label" placeholder="Например: Основной ПК">
+            </label>
+            {% if hwids|length < 3 %}
+                <button type="submit" class="btn">Привязать</button>
+            {% else %}
+                <p class="flash error">Достигнут лимит HWID (3). Удали лишний.</p>
+            {% endif %}
+        </form>
+    </div>
+
+    <div class="card">
+        <h3>Мои HWID</h3>
+        {% if hwids %}
+            <ul class="hwid-list">
+                {% for h in hwids %}
+                    <li>
+                        <div>
+                            <code>{{ h['hwid'] }}</code>
+                            {% if h['label'] %}<span class="muted">— {{ h['label'] }}</span>{% endif %}
+                            <span class="muted small">({{ h['created_at'] }})</span>
+                        </div>
+                        <form method="post" action="{{ url_for('delete_hwid', hwid_id=h['id']) }}" class="inline">
+                            <button type="submit" class="btn danger small">Удалить</button>
+                        </form>
+                    </li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <p class="muted">Пока нет привязанных HWID.</p>
+        {% endif %}
+    </div>
+
+    <div class="card">
+        <h3>Скачать клиент</h3>
+        <p class="muted">После привязки HWID можно скачать клиент и играть.</p>
+        <a href="{{ url_for('download') }}" class="btn">Перейти к скачиванию</a>
+    </div>
+</div>
+{% endblock %}

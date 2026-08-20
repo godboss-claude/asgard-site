@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="hero">
+    <h1>ASGARD</h1>
+    <p class="sub">Свой клиент. Свои правила.</p>
+    <div class="hero-actions">
+        <a href="{{ url_for('download') }}" class="btn big">Скачать клиент</a>
+        {% if not user %}
+            <a href="{{ url_for('register') }}" class="btn big ghost">Создать аккаунт</a>
+        {% endif %}
+    </div>
+    <div class="hero-features">
+        <div class="feature"><span>Стабильность</span><p>Оптимизация под разные сборки</p></div>
+        <div class="feature"><span>Личный кабинет</span><p>Привязка HWID и доступ</p></div>
+        <div class="feature"><span>Обновления</span><p>Новые функции каждую сборку</p></div>
+    </div>
+</section>
+{% endblock %}

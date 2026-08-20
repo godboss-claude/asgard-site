@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+.env
+asgard.db
+.secret_key
+venv/
+.venv/

@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Регистрация — Asgard{% endblock %}
+{% block content %}
+<div class="card">
+    <h2>Регистрация</h2>
+    {% if error %}<div class="flash error">{{ error }}</div>{% endif %}
+    <form method="post">
+        <label>Логин
+            <input type="text" name="username" required minlength="3" maxlength="20" autocomplete="username">
+        </label>
+        <label>Пароль
+            <input type="password" name="password" required minlength="6" autocomplete="new-password">
+        </label>
+        <label>Повтори пароль
+            <input type="password" name="confirm" required minlength="6" autocomplete="new-password">
+        </label>
+        <button type="submit" class="btn">Создать аккаунт</button>
+    </form>
+    <p class="muted">Уже есть аккаунт? <a href="{{ url_for('login') }}">Войти</a></p>
+</div>
+{% endblock %}
