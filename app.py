@@ -38,7 +38,7 @@ def _load_secret_key():
 app.secret_key = _load_secret_key()
 
 # Куда ведёт кнопка «Скачать клиент» (jar с Google Drive / ссылка на лаунчер).
-CLIENT_JAR_URL = "https://drive.google.com/uc?export=download&id=1GjB02yZc0fYc5-G_hTfowj7RNdI7vjyF"
+CLIENT_JAR_URL = "https://drive.google.com/uc?export=download&id=13qrqxxYsP-w563WsFellBnad3ZYXoIIK"
 LAUNCHER_ZIP_URL = "https://drive.google.com/uc?export=download&id=18CAEk46oGeaziVreKyjQhXZ30iQMgxT1"
 
 TOKEN_TTL_DAYS = 30
