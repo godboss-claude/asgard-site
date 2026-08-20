@@ -1,8 +1,11 @@
 import os
+import re
+import secrets
 import sqlite3
+from datetime import datetime, timedelta, timezone
 from functools import wraps
 
-from flask import Flask, g, redirect, render_template, request, session, url_for, flash
+from flask import Flask, g, jsonify, redirect, render_template, request, session, url_for, flash
 from werkzeug.security import check_password_hash, generate_password_hash
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -24,7 +27,11 @@ app.secret_key = _load_secret_key()
 
 # Куда ведёт кнопка «Скачать клиент» (jar с Google Drive / ссылка на лоадер).
 CLIENT_JAR_URL = "https://drive.google.com/uc?export=download&id=1GjB02yZc0fYc5-G_hTfowj7RNdI7vjyF"
-LOADER_ZIP_URL = ""  # можно поставить ссылку на Asgard-Loader.zip
+LAUNCHER_ZIP_URL = ""  # ссылка на Asgard-Launcher.zip на Google Drive
+
+TOKEN_TTL_DAYS = 30
+HWID_LIMIT = 3
+HWID_RE = re.compile(r"^[A-Za-z0-9\-:]{8,128}$")
 
 
 def get_db():
@@ -62,6 +69,14 @@ def init_db():
             );
 
             CREATE UNIQUE INDEX IF NOT EXISTS idx_hwid ON hwids (user_id, hwid);
+
+            CREATE TABLE IF NOT EXISTS tokens (
+                id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                token      TEXT UNIQUE NOT NULL,
+                created_at TEXT DEFAULT (datetime('now')),
+                expires_at TEXT NOT NULL
+            );
             """
         )
 
@@ -172,6 +187,13 @@ def add_hwid():
         return redirect(url_for("dashboard"))
 
     db = get_db()
+    count = db.execute(
+        "SELECT COUNT(*) AS c FROM hwids WHERE user_id = ?", (user["id"],)
+    ).fetchone()["c"]
+    if count >= HWID_LIMIT:
+        flash(f"Лимит HWID ({HWID_LIMIT}) исчерпан. Сначала удали один из существующих.", "error")
+        return redirect(url_for("dashboard"))
+
     try:
         db.execute(
             "INSERT INTO hwids (user_id, hwid, label) VALUES (?, ?, ?)",
@@ -202,8 +224,121 @@ def download():
         "download.html",
         user=current_user(),
         jar_url=CLIENT_JAR_URL,
-        loader_url=LOADER_ZIP_URL,
+        launcher_url=LAUNCHER_ZIP_URL,
     )
+
+
+def _now_utc():
+    return datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+
+
+def _expires_utc(days):
+    return (datetime.now(timezone.utc) + timedelta(days=days)).strftime("%Y-%m-%d %H:%M:%S")
+
+
+def _token_user(db, token):
+    row = db.execute(
+        """SELECT t.token, t.expires_at, u.*
+           FROM tokens t JOIN users u ON u.id = t.user_id
+           WHERE t.token = ?""",
+        (token,),
+    ).fetchone()
+    if row is None or row["expires_at"] < _now_utc():
+        return None
+    return row
+
+
+def _hwid_bound(db, user_id, hwid):
+    return (
+        db.execute(
+            "SELECT id FROM hwids WHERE user_id = ? AND hwid = ?",
+            (user_id, hwid),
+        ).fetchone()
+        is not None
+    )
+
+
+def _hwid_count(db, user_id):
+    return db.execute(
+        "SELECT COUNT(*) AS c FROM hwids WHERE user_id = ?", (user_id,)
+    ).fetchone()["c"]
+
+
+@app.route("/api/launcher/auth", methods=["POST"])
+def api_launcher_auth():
+    data = request.get_json(silent=True) or {}
+    username = (data.get("username") or "").strip()
+    password = data.get("password") or ""
+    hwid = (data.get("hwid") or "").strip()
+
+    if not username or not password:
+        return jsonify({"ok": False, "error": "Введи логин и пароль."}), 400
+    if not hwid or not HWID_RE.match(hwid):
+        return jsonify({"ok": False, "error": "Не удалось определить HWID этого компьютера."}), 400
+
+    db = get_db()
+    user = db.execute("SELECT * FROM users WHERE username = ?", (username,)).fetchone()
+    if user is None or not check_password_hash(user["password_hash"], password):
+        return jsonify({"ok": False, "error": "Неверный логин или пароль."}), 401
+
+    if not _hwid_bound(db, user["id"], hwid):
+        if _hwid_count(db, user["id"]) >= HWID_LIMIT:
+            return jsonify(
+                {
+                    "ok": False,
+                    "error": f"Лимит HWID ({HWID_LIMIT}) исчерпан. Удали старый HWID в личном кабинете на сайте.",
+                }
+            ), 403
+        db.execute(
+            "INSERT INTO hwids (user_id, hwid, label) VALUES (?, ?, ?)",
+            (user["id"], hwid, "auto"),
+        )
+        db.commit()
+
+    token = secrets.token_hex(32)
+    db.execute(
+        "INSERT INTO tokens (user_id, token, expires_at) VALUES (?, ?, ?)",
+        (user["id"], token, _expires_utc(TOKEN_TTL_DAYS)),
+    )
+    db.commit()
+    return jsonify(
+        {
+            "ok": True,
+            "token": token,
+            "username": user["username"],
+            "expires_in_days": TOKEN_TTL_DAYS,
+        }
+    )
+
+
+@app.route("/api/launcher/status", methods=["POST"])
+def api_launcher_status():
+    data = request.get_json(silent=True) or {}
+    token = (data.get("token") or "").strip()
+    hwid = (data.get("hwid") or "").strip()
+
+    if not token or not hwid:
+        return jsonify({"ok": False, "error": "Нет токена или HWID."}), 400
+
+    db = get_db()
+    row = _token_user(db, token)
+    if row is None:
+        return jsonify({"ok": False, "error": "Сессия истекла. Войди в лаунчер заново."}), 401
+    if not _hwid_bound(db, row["id"], hwid):
+        return jsonify({"ok": False, "error": "HWID не привязан к этому аккаунту."}), 403
+
+    return jsonify({"ok": True, "username": row["username"]})
+
+
+@app.route("/api/launcher/logout", methods=["POST"])
+def api_launcher_logout():
+    data = request.get_json(silent=True) or {}
+    token = (data.get("token") or "").strip()
+    if token:
+        db = get_db()
+        db.execute("DELETE FROM tokens WHERE token = ?", (token,))
+        db.commit()
+    return jsonify({"ok": True})
 
 
 init_db()

@@ -8,10 +8,15 @@
         <a href="{{ url_for('login') }}" class="btn big">Войти</a>
         <a href="{{ url_for('register') }}" class="btn big ghost">Создать аккаунт</a>
     {% else %}
-        <p class="muted">Доступ открыт. Скачай клиент и следуй инструкции.</p>
-        <a href="{{ jar_url }}" class="btn big">Скачать клиент (jar)</a>
-        {% if loader_url %}
-            <a href="{{ loader_url }}" class="btn big ghost">Скачать лоадер</a>
+        <p class="muted">Доступ открыт. Скачай лаунчер, войди в него своим аккаунтом — он сам скачает клиент и запустит игру.</p>
+        {% if launcher_url %}
+            <a href="{{ launcher_url }}" class="btn big">Скачать лаунчер</a>
+        {% else %}
+            <p class="muted">Лаунчер скоро будет доступен. Пока можно скачать клиент вручную:</p>
+            <a href="{{ jar_url }}" class="btn big">Скачать клиент (jar)</a>
+        {% endif %}
+        {% if launcher_url %}
+            <a href="{{ jar_url }}" class="btn big ghost">Клиент (jar) отдельно</a>
         {% endif %}
     {% endif %}
 </div>
