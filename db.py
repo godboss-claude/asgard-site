@@ -61,11 +61,11 @@ class _TursoBackend:
             if p is None:
                 out.append({"type": "null", "value": None})
             elif isinstance(p, bool):
-                out.append({"type": "integer", "value": int(p)})
+                out.append({"type": "integer", "value": "1" if p else "0"})
             elif isinstance(p, int):
-                out.append({"type": "integer", "value": p})
+                out.append({"type": "integer", "value": str(p)})
             elif isinstance(p, float):
-                out.append({"type": "float", "value": p})
+                out.append({"type": "float", "value": str(p)})
             else:
                 out.append({"type": "text", "value": str(p)})
         return out
@@ -104,7 +104,15 @@ class _TursoBackend:
             d = {}
             for i, cell in enumerate(r):
                 if isinstance(cell, dict):
-                    d[cols[i]] = cell.get("value")
+                    v = cell.get("value")
+                    t = cell.get("type")
+                    if t == "integer":
+                        v = int(v)
+                    elif t == "float":
+                        v = float(v)
+                    elif t == "boolean":
+                        v = bool(v)
+                    d[cols[i]] = v
                 else:
                     d[cols[i]] = cell
             out.append(d)
