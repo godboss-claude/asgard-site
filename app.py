@@ -94,6 +94,13 @@ def close_db(_exc):
         d.close()
 
 
+@app.after_request
+def _diag_headers(resp):
+    resp.headers["X-Asgard-Build"] = "turso-v1"
+    resp.headers["X-Asgard-Backend"] = "turso" if (dblib.TURSO_URL and dblib.TURSO_TOKEN) else "sqlite"
+    return resp
+
+
 def login_required(view):
     @wraps(view)
     def wrapped(*args, **kwargs):
