@@ -27,7 +27,7 @@ app.secret_key = _load_secret_key()
 
 # Куда ведёт кнопка «Скачать клиент» (jar с Google Drive / ссылка на лоадер).
 CLIENT_JAR_URL = "https://drive.google.com/uc?export=download&id=1GjB02yZc0fYc5-G_hTfowj7RNdI7vjyF"
-LAUNCHER_ZIP_URL = ""  # ссылка на Asgard-Launcher.zip на Google Drive
+LAUNCHER_ZIP_URL = "https://drive.google.com/uc?export=download&id=1s85aO0Dd4t8eNKpESlhZswHKDnjBXYsj"
 
 TOKEN_TTL_DAYS = 30
 HWID_LIMIT = 3
