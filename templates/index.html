@@ -1,18 +1,90 @@
 {% extends "base.html" %}
+{% block title %}Asgard — клиент для Minecraft{% endblock %}
 {% block content %}
 <section class="hero">
+    <div class="hero-logo">A</div>
     <h1>ASGARD</h1>
-    <p class="sub">Свой клиент. Свои правила.</p>
+    <p class="sub">Свой клиент для Minecraft 1.21.4. Быстрый лаунчер, личный кабинет и защита по HWID.</p>
     <div class="hero-actions">
-        <a href="{{ url_for('download') }}" class="btn big">Скачать клиент</a>
+        <a href="{{ url_for('download') }}" class="btn big">Скачать лаунчер</a>
         {% if not user %}
             <a href="{{ url_for('register') }}" class="btn big ghost">Создать аккаунт</a>
         {% endif %}
     </div>
-    <div class="hero-features">
-        <div class="feature"><span>Стабильность</span><p>Оптимизация под разные сборки</p></div>
-        <div class="feature"><span>Личный кабинет</span><p>Привязка HWID и доступ</p></div>
-        <div class="feature"><span>Обновления</span><p>Новые функции каждую сборку</p></div>
+    <div class="stats">
+        <div class="stat"><b>1.21.4</b><span>Minecraft</span></div>
+        <div class="stat"><b>Fabric</b><span>загрузчик</span></div>
+        <div class="stat"><b>HWID</b><span>защита</span></div>
+    </div>
+</section>
+
+<section class="section">
+    <h2>Почему Asgard</h2>
+    <div class="grid">
+        <div class="feature">
+            <span class="ico">&#9889;</span>
+            <span>Быстрый запуск</span>
+            <p>Один клик после входа — лаунчер сам скачает и запустит игру.</p>
+        </div>
+        <div class="feature">
+            <span class="ico">&#128274;</span>
+            <span>Защита HWID</span>
+            <p>Аккаунт привязывается к твоему компьютеру, доступ только у тебя.</p>
+        </div>
+        <div class="feature">
+            <span class="ico">&#128100;</span>
+            <span>Личный кабинет</span>
+            <p>Регистрация на сайте, вход в лаунчере, управление привязками.</p>
+        </div>
+        <div class="feature">
+            <span class="ico">&#9881;</span>
+            <span>Свои настройки</span>
+            <p>Гибкая настройка клиента под твою сборку и железо.</p>
+        </div>
+        <div class="feature">
+            <span class="ico">&#128640;</span>
+            <span>Актуальная версия</span>
+            <p>Сборка под Minecraft 1.21.4 с Fabric Loader.</p>
+        </div>
+        <div class="feature">
+            <span class="ico">&#9993;</span>
+            <span>Поддержка</span>
+            <p>Связь с нами — в Telegram и TikTok.</p>
+        </div>
+    </div>
+</section>
+
+<section class="section">
+    <h2>Как начать</h2>
+    <div class="steps">
+        <div class="step"><b>1</b><span>Зарегистрируйся на сайте</span></div>
+        <div class="step"><b>2</b><span>Скачай лаунчер</span></div>
+        <div class="step"><b>3</b><span>Войди и запускай — клиент установится сам</span></div>
+    </div>
+    <div class="center">
+        <a href="{{ url_for('download') }}" class="btn big">Перейти к скачиванию</a>
+    </div>
+</section>
+
+<section class="section">
+    <h2>Частые вопросы</h2>
+    <div class="faq">
+        <details>
+            <summary>Зачем нужна регистрация?</summary>
+            <p>Аккаунт привязывает доступ к клиенту и защищает его от распространения — каждый вход проверяется по HWID.</p>
+        </details>
+        <details>
+            <summary>Что такое HWID?</summary>
+            <p>Уникальный отпечаток твоего компьютера. Он автоматически привязывается к аккаунту при входе в лаунчере (до 3 устройств).</p>
+        </details>
+        <details>
+            <summary>Сколько занимает установка?</summary>
+            <p>Лаунчер сам скачает клиент и нужные файлы. При первом запуске — несколько минут, дальше — секунды.</p>
+        </details>
+        <details>
+            <summary>У меня не работает — куда писать?</summary>
+            <p>Пиши нам: <a href="https://t.me/Harusanh" target="_blank" rel="noopener">Telegram</a> или <a href="https://www.tiktok.com/@harucheat" target="_blank" rel="noopener">TikTok</a>.</p>
+        </details>
     </div>
 </section>
 {% endblock %}
